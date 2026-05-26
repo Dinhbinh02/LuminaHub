@@ -73,7 +73,7 @@ To enable Google Drive backup and synchronization, you must set up your own Goog
 
 12. Inside the Lumina Hub extension options page, click **Sign in with Google**.
 13. A popup will prompt you to upload the downloaded JSON file. Select it, and the extension will automatically configure itself and start syncing!
-14. Keep this JSON file — you can use it to sign in on other devices too.
+14. Keep this JSON file — you can use it to sign in on other devices too. (Note: To use the extension on another device, simply reuse this same JSON file and add the Authorized redirect URI based on the extension's ID on that device to the Google Cloud Console settings).
 
 ---
 

@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>LuminaHub Options</title>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="options.css" />
+  </head>
+  <body>
+    <div class="options-container">
+      <aside class="sidebar">
+        <div class="sidebar-header">
+          <div class="logo-area">
+            <img class="logo-img" src="icons/icon48.png" alt="LuminaHub" />
+            <h2>Lumina<span>Hub</span></h2>
+          </div>
+          <button id="add-btn" class="primary-btn">Add Web</button>
+        </div>
+        <ul id="web-list" class="web-list"></ul>
+        <div class="sidebar-footer">
+          <div id="sync-profile" class="sync-profile hidden">
+            <img id="user-avatar" class="user-avatar" src="" alt="" />
+            <div class="user-info">
+              <span id="user-name">User Name</span>
+              <span id="sync-status">Connected</span>
+            </div>
+            <button id="logout-btn" class="icon-btn-text" title="Sign out">Sign out</button>
+          </div>
+          <button id="login-btn" class="sync-btn hidden">Sync to Cloud</button>
+        </div>
+      </aside>
+      <main class="main-panel">
+        <div id="sync-setup-overlay" class="sync-setup-overlay hidden">
+          <div class="sync-setup-modal">
+            <h3>Google Sync Setup</h3>
+            <p>Please upload your Google Cloud credentials JSON file (e.g. <code>client_secret_*.json</code>) to enable cloud sync and backup of your configurations.</p>
+            <div class="sync-setup-actions">
+              <input type="file" id="input-sync-credentials" accept=".json" class="hidden" />
+              <button id="btn-upload-sync-json" class="primary-btn">Upload credentials JSON</button>
+              <button id="btn-cancel-sync-setup" class="secondary-btn">Cancel</button>
+            </div>
+          </div>
+        </div>
+        <div id="editor-view" class="editor-view hidden">
+          <div class="panel-header">
+            <h3 id="panel-title">Edit Website</h3>
+            <button id="delete-btn" class="danger-btn">Delete</button>
+          </div>
+          <div class="form-group">
+            <label for="web-name">Name</label>
+            <input type="text" id="web-name" placeholder="e.g., ChatGPT" />
+          </div>
+          <div class="form-group">
+            <label for="web-url">URL</label>
+            <input type="url" id="web-url" placeholder="https://chatgpt.com" />
+          </div>
+          <div class="form-group flex-group">
+            <div class="code-editor-wrapper">
+              <div class="editor-header">
+                <label>Custom JS</label>
+                <button type="button" id="format-js-btn" class="format-btn">Format</button>
+              </div>
+              <div id="web-js" class="code-editor-container"></div>
+            </div>
+            <div class="code-editor-wrapper">
+              <div class="editor-header">
+                <label>Custom CSS</label>
+                <button type="button" id="format-css-btn" class="format-btn">Format</button>
+              </div>
+              <div id="web-css" class="code-editor-container"></div>
+            </div>
+          </div>
+          <div class="actions">
+            <button id="save-btn" class="primary-btn">Save Changes</button>
+          </div>
+        </div>
+        <div id="empty-view" class="empty-view">
+          <p>Select a website from the sidebar to customize or add a new one.</p>
+        </div>
+      </main>
+    </div>
+    <script src="ace.js"></script>
+    <script src="ext-language_tools.js"></script>
+    <script src="ext-beautify.js"></script>
+    <script type="module" src="options.js"></script>
+  </body>
+</html>

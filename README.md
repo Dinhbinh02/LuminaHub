@@ -43,39 +43,7 @@ LuminaHub/
 5. Select the `LuminaHub` directory.
 6. Click the extension icon to slide open the workspace sidebar!
 
-### ⚙️ Setting up OAuth Credentials (Google Drive Sync)
 
-To enable Google Drive backup and synchronization, you must set up your own Google OAuth2 credentials:
-
-**Step 1 — Create a Google Cloud project**
-
-1. Go to the [Google Cloud Console](https://console.cloud.google.com/).
-2. Create a new project (e.g. `Lumina Hub`).
-3. Go to **APIs & Services > Library**, search for **Google Drive API**, and click **Enable**.
-
-**Step 2 — Configure Google Auth Platform**
-
-3. In the left menu, search for and open **Google Auth Platform** (or go to **APIs & Services > Google Auth Platform**). Click **Get Started** if prompted.
-4. **Branding**: Enter your app name (e.g. `Lumina Hub`) and a user support email. Click **Next**.
-5. **Audience**: Select **External** so any Google account can use it. Click **Next**.
-6. Back on the **Google Auth Platform** overview, click **Publish App** to move it out of Testing mode (otherwise only test users can sign in).
-
-**Step 3 — Create OAuth credentials**
-
-7. Go to **APIs & Services > Credentials**.
-8. Click **Create Credentials** > **OAuth client ID**.
-9. Select **Web application** as the application type.
-10. Under **Authorized redirect URIs**, click **Add URI** and enter: `https://<YOUR_EXTENSION_ID>.chromiumapp.org/` — replace `<YOUR_EXTENSION_ID>` with your extension's ID (found on `chrome://extensions/` after loading it unpacked).
-11. Click **Create**.
-12. Click the **Download JSON** button to download the configuration file (named `client_secret_<client-id>.json`).
-
-**Step 4 — Connect to the extension**
-
-12. Inside the Lumina Hub extension options page, click **Sign in with Google**.
-13. A popup will prompt you to upload the downloaded JSON file. Select it, and the extension will automatically configure itself and start syncing!
-14. Keep this JSON file — you can use it to sign in on other devices too. (Note: To use the extension on another device, simply reuse this same JSON file and add the Authorized redirect URI based on the extension's ID on that device to the Google Cloud Console settings).
-
----
 
 ## 🔒 Permissions & Security
 

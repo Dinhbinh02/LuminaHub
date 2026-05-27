@@ -82,7 +82,23 @@ function applyAssets(providers, assets) {
   }
 }
 
+const isFrame = window.self !== window.top;
+let fallbackTimeout;
+
+if (isFrame) {
+  const hideStyle = document.createElement("style");
+  hideStyle.id = "__luminahub_temp_hide__";
+  hideStyle.textContent = "html { display: none !important; }";
+  (document.head || document.documentElement).appendChild(hideStyle);
+
+  fallbackTimeout = setTimeout(() => {
+    const styleEl = document.getElementById("__luminahub_temp_hide__");
+    if (styleEl) styleEl.remove();
+  }, 200);
+}
+
 chrome.storage.local.get(["providers", "custom_assets"], (res) => {
+  if (fallbackTimeout) clearTimeout(fallbackTimeout);
   const providers = res.providers || [];
   const assets = res.custom_assets || {};
   const currentUrl = window.location.href;
@@ -117,6 +133,11 @@ chrome.storage.local.get(["providers", "custom_assets"], (res) => {
   }
 
   applyAssets(providers, assets);
+
+  if (isFrame) {
+    const tempStyle = document.getElementById("__luminahub_temp_hide__");
+    if (tempStyle) tempStyle.remove();
+  }
 });
 
 try {

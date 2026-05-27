@@ -141,3 +141,16 @@ chrome.storage.onChanged.addListener((changes) => {
     });
   }
 });
+
+try {
+  if (window.self !== window.top) {
+    const port = chrome.runtime.connect({ name: "lumina-frame" });
+    port.onMessage.addListener((msg) => {
+      if (msg.action === "back") {
+        window.history.back();
+      } else if (msg.action === "forward") {
+        window.history.forward();
+      }
+    });
+  }
+} catch (e) {}

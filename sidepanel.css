@@ -56,13 +56,14 @@ body {
 .app-header {
   display: flex;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: space-between;
   height: 48px;
   padding: 0 12px;
   background: var(--bg-header);
   backdrop-filter: blur(12px);
   z-index: 100;
   flex-shrink: 0;
+  border-bottom: 1px solid var(--border-color);
 }
 
 .logo-area {
@@ -90,24 +91,37 @@ body {
   color: var(--text-muted);
 }
 
-.controls-area {
+.left-controls {
   display: flex;
   align-items: center;
   gap: 4px;
   flex: 1;
 }
 
+.center-controls {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex: 2;
+}
+
+.right-controls {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex: 1;
+}
+
 .custom-dropdown {
   position: relative;
-  min-width: 110px;
-  flex: 1;
+  width: 150px;
 }
 
 .dropdown-trigger {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+  justify-content: center;
+  gap: 6px;
   font-family: var(--font-family);
   font-size: 12px;
   font-weight: 600;
@@ -115,7 +129,7 @@ body {
   background: transparent;
   border: 1px solid var(--border-color);
   border-radius: 8px;
-  padding: 6px 10px;
+  padding: 6px 12px;
   cursor: pointer;
   user-select: none;
   transition: var(--transition);
@@ -142,7 +156,8 @@ body {
 .dropdown-menu {
   position: absolute;
   top: calc(100% + 4px);
-  right: 0;
+  left: 50%;
+  transform: translateX(-50%);
   min-width: 140px;
   background: #ffffff;
   border: 1px solid var(--border-color);

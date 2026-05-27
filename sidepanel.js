@@ -19,6 +19,8 @@ const menu = document.getElementById("dropdown-menu");
 
 const frame = document.getElementById("web-frame");
 const loader = document.getElementById("loader");
+const backBtn = document.getElementById("back-btn");
+const forwardBtn = document.getElementById("forward-btn");
 const refreshBtn = document.getElementById("refresh-btn");
 const optionsBtn = document.getElementById("options-btn");
 
@@ -169,6 +171,30 @@ chrome.storage.onChanged.addListener((changes) => {
         frame.src = frame.src;
       }
     });
+  }
+});
+
+let framePort = null;
+chrome.runtime.onConnect.addListener((port) => {
+  if (port.name === "lumina-frame" && !port.sender.tab) {
+    framePort = port;
+    port.onDisconnect.addListener(() => {
+      if (framePort === port) {
+        framePort = null;
+      }
+    });
+  }
+});
+
+backBtn.addEventListener("click", () => {
+  if (framePort) {
+    framePort.postMessage({ action: "back" });
+  }
+});
+
+forwardBtn.addEventListener("click", () => {
+  if (framePort) {
+    framePort.postMessage({ action: "forward" });
   }
 });
 

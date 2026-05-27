@@ -13,7 +13,55 @@
   <body>
     <div class="app-container">
       <header class="app-header">
-        <div class="controls-area">
+        <div class="left-controls">
+          <button id="back-btn" class="icon-btn" aria-label="Back">
+            <svg
+              viewBox="0 0 24 24"
+              width="16"
+              height="16"
+              stroke="currentColor"
+              stroke-width="2.5"
+              fill="none"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <line x1="19" y1="12" x2="5" y2="12"></line>
+              <polyline points="12 19 5 12 12 5"></polyline>
+            </svg>
+          </button>
+          <button id="forward-btn" class="icon-btn" aria-label="Forward">
+            <svg
+              viewBox="0 0 24 24"
+              width="16"
+              height="16"
+              stroke="currentColor"
+              stroke-width="2.5"
+              fill="none"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+              <polyline points="12 5 19 12 12 19"></polyline>
+            </svg>
+          </button>
+          <button id="refresh-btn" class="icon-btn" aria-label="Refresh">
+            <svg
+              viewBox="0 0 24 24"
+              width="16"
+              height="16"
+              stroke="currentColor"
+              stroke-width="2.5"
+              fill="none"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M23 4v6h-6"></path>
+              <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+            </svg>
+          </button>
+        </div>
+
+        <div class="center-controls">
           <div class="custom-dropdown" id="web-dropdown">
             <div class="dropdown-trigger" id="dropdown-trigger">
               <span id="selected-web-name">Select Web</span>
@@ -23,21 +71,9 @@
             </div>
             <ul class="dropdown-menu" id="dropdown-menu"></ul>
           </div>
-          <button id="refresh-btn" class="icon-btn" aria-label="Refresh">
-            <svg
-              viewBox="0 0 24 24"
-              width="16"
-              height="16"
-              stroke="currentColor"
-              stroke-width="2"
-              fill="none"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            >
-              <path d="M23 4v6h-6"></path>
-              <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
-            </svg>
-          </button>
+        </div>
+
+        <div class="right-controls">
           <button id="options-btn" class="icon-btn" aria-label="Settings">
             <svg
               viewBox="0 0 24 24"

@@ -7,70 +7,6 @@ function simpleHash(str) {
   return h.toString(36);
 }
 
-async function generatePkcePair() {
-  const array = new Uint8Array(32);
-  crypto.getRandomValues(array);
-  const verifier = Array.from(array, dec => ('0' + dec.toString(16)).slice(-2)).join('');
-  const encoder = new TextEncoder();
-  const data = encoder.encode(verifier);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-  const challenge = btoa(String.fromCharCode(...new Uint8Array(hashBuffer)))
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=+$/, '');
-  return { verifier, challenge };
-}
-
-async function exchangeCodeForTokens(clientId, code, verifier, redirectUrl) {
-  const result = await chrome.storage.local.get("client_secret");
-  const clientSecret = result.client_secret;
-  const res = await fetch("https://oauth2.googleapis.com/token", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      client_id: clientId,
-      client_secret: clientSecret,
-      grant_type: "authorization_code",
-      code: code,
-      code_verifier: verifier,
-      redirect_uri: redirectUrl
-    })
-  });
-  if (!res.ok) {
-    const errData = await res.json().catch(() => ({}));
-    throw new Error(errData.error_description || errData.error || "Failed to exchange code");
-  }
-  const data = await res.json();
-  return {
-    accessToken: data.access_token,
-    refreshToken: data.refresh_token
-  };
-}
-
-async function refreshAccessToken(clientId, refreshToken) {
-  const result = await chrome.storage.local.get("client_secret");
-  const clientSecret = result.client_secret;
-  const res = await fetch("https://oauth2.googleapis.com/token", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      client_id: clientId,
-      client_secret: clientSecret,
-      grant_type: "refresh_token",
-      refresh_token: refreshToken
-    })
-  });
-  if (!res.ok) {
-    const errData = await res.json().catch(() => ({}));
-    throw new Error(errData.error_description || errData.error || "Failed to refresh token");
-  }
-  const data = await res.json();
-  return {
-    accessToken: data.access_token,
-    refreshToken: data.refresh_token || refreshToken
-  };
-}
-
 export function getAuthToken(interactive = false) {
   return new Promise((resolve, reject) => {
     if (typeof chrome === "undefined" || !chrome.identity) {
@@ -78,111 +14,21 @@ export function getAuthToken(interactive = false) {
       return;
     }
 
-    chrome.storage.local.get(["oauth_token", "oauth_token_time", "refresh_token", "client_id", "client_secret"], async (result) => {
-      if (result.oauth_token && result.oauth_token_time) {
-        const age = Date.now() - result.oauth_token_time;
-        if (age < 3500 * 1000) {
-          resolve(result.oauth_token);
-          return;
-        }
-      }
-
-      const clientId = result.client_id;
-      const clientSecret = result.client_secret;
-
-      if (!clientId || !clientSecret) {
-        reject(new Error("credentials_required"));
-        return;
-      }
-
-      if (result.refresh_token) {
-        try {
-          const refreshed = await refreshAccessToken(clientId, result.refresh_token);
-          chrome.storage.local.set({
-            oauth_token: refreshed.accessToken,
-            oauth_token_time: Date.now(),
-            refresh_token: refreshed.refreshToken
-          }, () => {
-            resolve(refreshed.accessToken);
-          });
-          return;
-        } catch (err) {
-          console.error(err);
-        }
-      }
-
-      if (!interactive) {
-        reject(new Error("interaction_required"));
-        return;
-      }
-
-      try {
-        const pair = await generatePkcePair();
-        chrome.storage.local.set({ pkce_verifier: pair.verifier }, () => {
-          fallbackToWebAuthFlowPKCE(resolve, reject, clientId, pair.challenge);
-        });
-      } catch (err) {
-        reject(err);
+    chrome.identity.getAuthToken({ interactive: interactive }, (token) => {
+      if (chrome.runtime.lastError) {
+        reject(new Error(chrome.runtime.lastError.message));
+      } else {
+        resolve(token);
       }
     });
   });
 }
 
-function fallbackToWebAuthFlowPKCE(resolve, reject, clientId, challenge) {
-  const redirectUrl = chrome.identity.getRedirectURL();
-  const scopes = "openid email profile https://www.googleapis.com/auth/drive.file";
-  const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&response_type=code&redirect_uri=${encodeURIComponent(redirectUrl)}&scope=${encodeURIComponent(scopes)}&code_challenge=${challenge}&code_challenge_method=S256&access_type=offline&prompt=consent`;
-
-  chrome.identity.launchWebAuthFlow({
-    url: authUrl,
-    interactive: true
-  }, (responseUrl) => {
-    if (chrome.runtime.lastError) {
-      reject(chrome.runtime.lastError);
-      return;
-    }
-    if (!responseUrl) {
-      reject(new Error("Authentication failed: empty response"));
-      return;
-    }
-
-    chrome.storage.local.get(["pkce_verifier"], async (result) => {
-      const verifier = result.pkce_verifier;
-      try {
-        const url = new URL(responseUrl);
-        const hashParams = new URLSearchParams(url.hash.substring(1));
-        const searchParams = new URLSearchParams(url.search);
-        const code = hashParams.get("code") || searchParams.get("code");
-        const error = hashParams.get("error") || searchParams.get("error");
-
-        if (code) {
-          try {
-            const tokenRes = await exchangeCodeForTokens(clientId, code, verifier, redirectUrl);
-            chrome.storage.local.set({
-              oauth_token: tokenRes.accessToken,
-              oauth_token_time: Date.now(),
-              refresh_token: tokenRes.refreshToken
-            }, () => {
-              resolve(tokenRes.accessToken);
-            });
-          } catch (exchangeErr) {
-            reject(exchangeErr);
-          }
-        } else if (error) {
-          reject(new Error(error));
-        } else {
-          reject(new Error("Authorization code not found in response"));
-        }
-      } catch (e) {
-        reject(e);
-      }
-    });
-  });
-}
-
-export function removeCachedAuthToken(_token) {
+export function removeCachedAuthToken(token) {
   return new Promise((resolve) => {
-    chrome.storage.local.remove(["oauth_token", "oauth_token_time", "refresh_token", "last_sync_hash", "user_profile"], resolve);
+    chrome.identity.removeCachedAuthToken({ token: token }, () => {
+      chrome.storage.local.remove(["oauth_token", "oauth_token_time", "refresh_token", "last_sync_hash", "user_profile"], resolve);
+    });
   });
 }
 

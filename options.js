@@ -39,11 +39,6 @@ const syncStatus = document.getElementById("sync-status");
 const logoutBtn = document.getElementById("logout-btn");
 const loginBtn = document.getElementById("login-btn");
 
-const syncSetupOverlay = document.getElementById("sync-setup-overlay");
-const inputSyncCredentials = document.getElementById("input-sync-credentials");
-const btnUploadSyncJson = document.getElementById("btn-upload-sync-json");
-const btnCancelSyncSetup = document.getElementById("btn-cancel-sync-setup");
-
 function init() {
   chrome.storage.local.get(["providers", "custom_assets"], (result) => {
     providers = result.providers || DEFAULT_PROVIDERS;
@@ -116,10 +111,6 @@ async function loginGoogle() {
       });
     });
   } catch (e) {
-    if (e.message === "credentials_required") {
-      syncSetupOverlay.classList.remove("hidden");
-      return;
-    }
     console.error("Google login error:", e);
     syncStatus.textContent = "Login failed";
   }
@@ -139,40 +130,7 @@ async function logoutGoogle() {
 loginBtn.addEventListener("click", loginGoogle);
 logoutBtn.addEventListener("click", logoutGoogle);
 
-btnUploadSyncJson.addEventListener("click", () => {
-  inputSyncCredentials.click();
-});
 
-btnCancelSyncSetup.addEventListener("click", () => {
-  syncSetupOverlay.classList.add("hidden");
-});
-
-inputSyncCredentials.addEventListener("change", (e) => {
-  const file = e.target.files[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = async (evt) => {
-    try {
-      const text = evt.target.result;
-      const data = JSON.parse(text);
-      const config = data.web || data.installed;
-      if (!config || !config.client_id || !config.client_secret) {
-        throw new Error("Invalid credentials JSON format. Missing client_id or client_secret.");
-      }
-      await chrome.storage.local.set({
-        client_id: config.client_id,
-        client_secret: config.client_secret
-      });
-      syncSetupOverlay.classList.add("hidden");
-      loginGoogle();
-    } catch (err) {
-      console.error(err);
-      alert(`Configuration failed: ${err.message}`);
-    }
-  };
-  reader.readAsText(file);
-  e.target.value = "";
-});
 
 function initEditors() {
   jsEditor = ace.edit("web-js");

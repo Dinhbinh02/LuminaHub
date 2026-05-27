@@ -37,6 +37,7 @@ const userAvatar = document.getElementById("user-avatar");
 const userName = document.getElementById("user-name");
 const syncStatus = document.getElementById("sync-status");
 const logoutBtn = document.getElementById("logout-btn");
+const manualSyncBtn = document.getElementById("manual-sync-btn");
 const loginBtn = document.getElementById("login-btn");
 
 function init() {
@@ -56,12 +57,20 @@ function init() {
 }
 
 function renderSyncUI() {
-  chrome.storage.local.get(["user_profile", "client_id"], (result) => {
+  chrome.storage.local.get(["user_profile", "last_sync_timestamp"], (result) => {
     if (result.user_profile) {
       userName.textContent = result.user_profile.name || "Google User";
       userAvatar.src = result.user_profile.picture || "";
       syncProfile.classList.remove("hidden");
       loginBtn.classList.add("hidden");
+
+      const lastSyncTimeEl = document.getElementById("last-sync-time");
+      if (result.last_sync_timestamp) {
+        const timeStr = new Date(result.last_sync_timestamp).toLocaleTimeString();
+        lastSyncTimeEl.textContent = `Last sync: ${timeStr}`;
+      } else {
+        lastSyncTimeEl.textContent = "Never synced";
+      }
     } else {
       syncProfile.classList.add("hidden");
       loginBtn.classList.remove("hidden");
@@ -77,7 +86,10 @@ async function attemptSilentSync() {
     renderSyncUI();
     syncStatus.textContent = "Syncing...";
     await syncData(token);
-    syncStatus.textContent = "Synced to cloud";
+    chrome.storage.local.set({ last_sync_timestamp: Date.now() }, () => {
+      syncStatus.textContent = "Synced to cloud";
+      renderSyncUI();
+    });
   } catch (err) {
     if (err.message !== "credentials_required" && err.message !== "interaction_required") {
       console.error("Silent sync error:", err);
@@ -95,15 +107,17 @@ async function loginGoogle() {
       renderSyncUI();
       syncStatus.textContent = "Syncing...";
       syncData(token).then(() => {
-        syncStatus.textContent = "Synced to cloud";
-        // Reload layout in case remote data brought down new configs
-        chrome.storage.local.get(["providers", "custom_assets"], (result) => {
-          providers = result.providers || DEFAULT_PROVIDERS;
-          customAssets = result.custom_assets || {};
-          renderSidebar();
-          if (providers.length > 0) {
-            selectWeb(providers[0].id);
-          }
+        chrome.storage.local.set({ last_sync_timestamp: Date.now() }, () => {
+          syncStatus.textContent = "Synced to cloud";
+          renderSyncUI();
+          chrome.storage.local.get(["providers", "custom_assets"], (result) => {
+            providers = result.providers || DEFAULT_PROVIDERS;
+            customAssets = result.custom_assets || {};
+            renderSidebar();
+            if (providers.length > 0) {
+              selectWeb(providers[0].id);
+            }
+          });
         });
       }).catch(err => {
         console.error(err);
@@ -116,12 +130,35 @@ async function loginGoogle() {
   }
 }
 
+async function handleManualSync() {
+  syncStatus.textContent = "Syncing...";
+  try {
+    const token = await getAuthToken(true);
+    await syncData(token);
+    chrome.storage.local.set({ last_sync_timestamp: Date.now() }, () => {
+      syncStatus.textContent = "Synced to cloud";
+      renderSyncUI();
+      chrome.storage.local.get(["providers", "custom_assets"], (result) => {
+        providers = result.providers || DEFAULT_PROVIDERS;
+        customAssets = result.custom_assets || {};
+        renderSidebar();
+        if (providers.length > 0) {
+          selectWeb(providers[0].id);
+        }
+      });
+    });
+  } catch (err) {
+    console.error("Manual sync failed:", err);
+    syncStatus.textContent = "Sync failed";
+  }
+}
+
 async function logoutGoogle() {
   chrome.storage.local.get(["oauth_token"], async (result) => {
     if (result.oauth_token) {
       await removeCachedAuthToken(result.oauth_token);
     }
-    chrome.storage.local.remove(["user_profile", "oauth_token", "oauth_token_time", "refresh_token", "last_sync_hash"], () => {
+    chrome.storage.local.remove(["user_profile", "oauth_token", "oauth_token_time", "refresh_token", "last_sync_hash", "last_sync_timestamp"], () => {
       renderSyncUI();
     });
   });
@@ -129,6 +166,7 @@ async function logoutGoogle() {
 
 loginBtn.addEventListener("click", loginGoogle);
 logoutBtn.addEventListener("click", logoutGoogle);
+manualSyncBtn.addEventListener("click", handleManualSync);
 
 
 

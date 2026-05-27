@@ -27,8 +27,12 @@
             <div class="user-info">
               <span id="user-name">User Name</span>
               <span id="sync-status">Connected</span>
+              <span id="last-sync-time" style="font-size: 9px; color: var(--text-muted); margin-top: 2px;"></span>
             </div>
-            <button id="logout-btn" class="icon-btn-text" title="Sign out">Sign out</button>
+            <div class="sync-profile-actions" style="display: flex; flex-direction: column; gap: 4px; align-items: flex-end;">
+              <button id="manual-sync-btn" class="icon-btn-text" title="Sync now">Sync now</button>
+              <button id="logout-btn" class="icon-btn-text" title="Sign out">Sign out</button>
+            </div>
           </div>
           <button id="login-btn" class="sync-btn hidden">
             <svg class="google-icon" viewBox="0 0 24 24" width="16" height="16" style="margin-right: 8px;">

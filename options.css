@@ -388,7 +388,9 @@ body {
   padding: 10px;
   cursor: pointer;
   transition: var(--transition);
-  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .sync-btn:hover {

@@ -8,16 +8,10 @@
     "storage",
     "declarativeNetRequest",
     "declarativeNetRequestWithHostAccess",
-    "identity"
+    "identity",
+    "favicon"
   ],
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAuilrMtYNNu3938BU2X5J44uCdEea1fCp9vb41BfjgDVyVq32+PtHEno9qhvL/7+pQio0ximSJoH/4Tk4IokJB9jZmLEX9drZ48UZeGj9OXs3IOO6ETRZKrjUky71ltFV9WDskWq/dHrFIG6CS8ScfSgCm77Z4iLWtSKxNcLyDlwGh/GsVjwyP5HjYB/z9Mjg95crgCEwgVROpT1P2Kpo0gFJSk66mkn7DeH5VQArbzlQajPp5hzpmVB8EFby/rXO6nnR9cHSWrrQ90ggwIwx9q20VMXsB+LhElXelf53OkBooo621QXqhY79P1P13fy5vu2oRvNRRocZzUvliiex0wIDAQAB",
-  "oauth2": {
-    "client_id": "824888142961-nhi5392cpmp9vqvscoddj83lrvprjiii.apps.googleusercontent.com",
-    "scopes": [
-      "https://www.googleapis.com/auth/drive.file"
-    ]
-  },
-
   "host_permissions": [
     "<all_urls>"
   ],

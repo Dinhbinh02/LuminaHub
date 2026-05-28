@@ -16,6 +16,11 @@ let cssEditor = null;
 let providers = [];
 let customAssets = {};
 let selectedId = null;
+let selectedZoom = 100;
+
+const zoomVal = document.getElementById("zoom-val");
+const zoomInBtn = document.getElementById("zoom-in-btn");
+const zoomOutBtn = document.getElementById("zoom-out-btn");
 
 const webList = document.getElementById("web-list");
 const addBtn = document.getElementById("add-btn");
@@ -39,6 +44,11 @@ const syncStatus = document.getElementById("sync-status");
 const logoutBtn = document.getElementById("logout-btn");
 const manualSyncBtn = document.getElementById("manual-sync-btn");
 const loginBtn = document.getElementById("login-btn");
+
+const syncSetupOverlay = document.getElementById("sync-setup-overlay");
+const inputSyncCredentials = document.getElementById("input-sync-credentials");
+const btnUploadSyncJson = document.getElementById("btn-upload-sync-json");
+const btnCancelSyncSetup = document.getElementById("btn-cancel-sync-setup");
 
 function init() {
   chrome.storage.local.get(["providers", "custom_assets"], (result) => {
@@ -79,9 +89,19 @@ function renderSyncUI() {
 }
 
 async function attemptSilentSync() {
+  let token = null;
   try {
-    const token = await getAuthToken(false);
-    const profile = await getUserProfile(token);
+    token = await getAuthToken(false);
+    let profile = null;
+    try {
+      profile = await getUserProfile(token);
+    } catch (profileErr) {
+      console.warn("Silent sync profile fetch failed:", profileErr);
+      if (profileErr.message === "UNAUTHORIZED") {
+        throw profileErr;
+      }
+      profile = { name: "Lumina User", picture: "icons/icon48.png" };
+    }
     chrome.storage.local.set({ user_profile: profile });
     renderSyncUI();
     syncStatus.textContent = "Syncing...";
@@ -91,6 +111,10 @@ async function attemptSilentSync() {
       renderSyncUI();
     });
   } catch (err) {
+    if (err.message === "UNAUTHORIZED" && token) {
+      await removeCachedAuthToken(token);
+      renderSyncUI();
+    }
     if (err.message !== "credentials_required" && err.message !== "interaction_required") {
       console.error("Silent sync error:", err);
       syncStatus.textContent = "Sync failed";
@@ -100,40 +124,63 @@ async function attemptSilentSync() {
 
 async function loginGoogle() {
   syncStatus.textContent = "Connecting...";
+  let token = null;
   try {
-    const token = await getAuthToken(true);
-    const profile = await getUserProfile(token);
-    chrome.storage.local.set({ user_profile: profile }, () => {
-      renderSyncUI();
-      syncStatus.textContent = "Syncing...";
-      syncData(token).then(() => {
-        chrome.storage.local.set({ last_sync_timestamp: Date.now() }, () => {
-          syncStatus.textContent = "Synced to cloud";
-          renderSyncUI();
-          chrome.storage.local.get(["providers", "custom_assets"], (result) => {
-            providers = result.providers || DEFAULT_PROVIDERS;
-            customAssets = result.custom_assets || {};
-            renderSidebar();
-            if (providers.length > 0) {
-              selectWeb(providers[0].id);
-            }
-          });
-        });
-      }).catch(err => {
-        console.error(err);
-        syncStatus.textContent = "Sync failed";
-      });
+    token = await getAuthToken(true);
+    let profile = null;
+    try {
+      profile = await getUserProfile(token);
+    } catch (profileErr) {
+      console.warn("Login profile fetch failed:", profileErr);
+      if (profileErr.message === "UNAUTHORIZED") {
+        throw profileErr;
+      }
+      profile = { name: "Lumina User", picture: "icons/icon48.png" };
+    }
+    
+    await new Promise((resolve) => {
+      chrome.storage.local.set({ user_profile: profile }, resolve);
+    });
+    renderSyncUI();
+    
+    syncStatus.textContent = "Syncing...";
+    await syncData(token);
+    
+    await new Promise((resolve) => {
+      chrome.storage.local.set({ last_sync_timestamp: Date.now() }, resolve);
+    });
+    
+    syncStatus.textContent = "Synced to cloud";
+    renderSyncUI();
+    
+    chrome.storage.local.get(["providers", "custom_assets"], (result) => {
+      providers = result.providers || DEFAULT_PROVIDERS;
+      customAssets = result.custom_assets || {};
+      renderSidebar();
+      if (providers.length > 0) {
+        selectWeb(providers[0].id);
+      }
     });
   } catch (e) {
     console.error("Google login error:", e);
+    if (e.message === "credentials_required") {
+      syncSetupOverlay.classList.remove("hidden");
+      syncStatus.textContent = "Credentials required";
+      return;
+    }
+    if (e.message === "UNAUTHORIZED" && token) {
+      await removeCachedAuthToken(token);
+      renderSyncUI();
+    }
     syncStatus.textContent = "Login failed";
   }
 }
 
 async function handleManualSync() {
   syncStatus.textContent = "Syncing...";
+  let token = null;
   try {
-    const token = await getAuthToken(true);
+    token = await getAuthToken(true);
     await syncData(token);
     chrome.storage.local.set({ last_sync_timestamp: Date.now() }, () => {
       syncStatus.textContent = "Synced to cloud";
@@ -149,6 +196,15 @@ async function handleManualSync() {
     });
   } catch (err) {
     console.error("Manual sync failed:", err);
+    if (err.message === "credentials_required") {
+      syncSetupOverlay.classList.remove("hidden");
+      syncStatus.textContent = "Credentials required";
+      return;
+    }
+    if (err.message === "UNAUTHORIZED" && token) {
+      await removeCachedAuthToken(token);
+      renderSyncUI();
+    }
     syncStatus.textContent = "Sync failed";
   }
 }
@@ -167,6 +223,68 @@ async function logoutGoogle() {
 loginBtn.addEventListener("click", loginGoogle);
 logoutBtn.addEventListener("click", logoutGoogle);
 manualSyncBtn.addEventListener("click", handleManualSync);
+
+btnCancelSyncSetup.addEventListener("click", () => {
+  syncSetupOverlay.classList.add("hidden");
+});
+
+btnUploadSyncJson.addEventListener("click", () => {
+  inputSyncCredentials.click();
+});
+
+inputSyncCredentials.addEventListener("change", (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = async (evt) => {
+    try {
+      const text = evt.target.result;
+      const data = JSON.parse(text);
+      const config = data.web || data.installed;
+      if (!config || !config.client_id || !config.client_secret) {
+        throw new Error("Invalid credentials JSON format. Missing client_id or client_secret.");
+      }
+      await chrome.storage.local.set({
+        client_id: config.client_id,
+        client_secret: config.client_secret
+      });
+      syncSetupOverlay.classList.add("hidden");
+      alert("Credentials configured successfully!");
+      loginGoogle();
+    } catch (err) {
+      console.error("Error reading credentials file:", err);
+      alert(`Configuration failed: ${err.message}`);
+    }
+  };
+  reader.readAsText(file);
+  e.target.value = "";
+});
+
+zoomInBtn.addEventListener("click", () => {
+  if (selectedZoom < 500) {
+    selectedZoom += 5;
+    zoomVal.textContent = `${selectedZoom}%`;
+    const provider = providers.find((p) => p.id === selectedId);
+    if (provider) {
+      provider.zoom = selectedZoom;
+      provider.updatedAt = Date.now();
+      chrome.storage.local.set({ providers });
+    }
+  }
+});
+
+zoomOutBtn.addEventListener("click", () => {
+  if (selectedZoom > 20) {
+    selectedZoom -= 5;
+    zoomVal.textContent = `${selectedZoom}%`;
+    const provider = providers.find((p) => p.id === selectedId);
+    if (provider) {
+      provider.zoom = selectedZoom;
+      provider.updatedAt = Date.now();
+      chrome.storage.local.set({ providers });
+    }
+  }
+});
 
 
 
@@ -205,11 +323,82 @@ function initEditors() {
     cssEditor.setValue(cssEditor.getValue(), -1);
     ace.require("ace/ext/beautify").beautify(cssEditor.session);
   });
+
+  const jsSnippetsSelect = document.getElementById("js-snippets-select");
+  if (jsSnippetsSelect) {
+    jsSnippetsSelect.addEventListener("change", (e) => {
+      const value = e.target.value;
+      if (!value) return;
+      
+      let snippet = "";
+      if (value === "autofocus") {
+        snippet = `// Autofocus rich-textarea/input when user typing begins
+document.addEventListener('keydown', function(event) {
+  const inputElement = document.querySelector('rich-textarea div.ql-editor[contenteditable="true"], input[type="text"], input[type="search"], textarea');
+  if (!inputElement) return;
+
+  const activeElement = document.activeElement;
+  const isEditing = ['INPUT', 'TEXTAREA', 'SELECT'].includes(activeElement.tagName) || activeElement.isContentEditable;
+  const isCopyCommand = (event.ctrlKey || event.metaKey) && event.key === 'c';
+
+  if (!isEditing && !isCopyCommand && (event.key.length === 1 || event.key === 'Enter')) {
+    inputElement.focus();
+
+    const range = document.createRange();
+    range.selectNodeContents(inputElement);
+    range.collapse(false);
+
+    const selection = window.getSelection();
+    selection.removeAllRanges();
+    selection.addRange(range);
+  }
+});\n`;
+      } else if (value === "autoclick") {
+        snippet = `// Auto click a specific button by class or tag name
+const clickTimer = setInterval(() => {
+  const btn = document.querySelector('.btn-primary, button');
+  if (btn) {
+    btn.click();
+    clearInterval(clickTimer);
+  }
+}, 500);\n`;
+      } else if (value === "darkmode") {
+        snippet = `// Inject simple dark stylesheet dynamically
+const style = document.createElement('style');
+style.textContent = \`
+  html, body {
+    background-color: #121212 !important;
+    color: #e0e0e0 !important;
+  }
+  img, video {
+    filter: brightness(.8) contrast(1.2);
+  }
+\`;
+document.head.appendChild(style);\n`;
+      } else if (value === "scroll") {
+        snippet = `// Auto scroll page to bottom on content changes
+const observer = new MutationObserver(() => {
+  window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+});
+observer.observe(document.body, { childList: true, subtree: true });\n`;
+      }
+      
+      if (snippet && jsEditor) {
+        const session = jsEditor.getSession();
+        const cursor = jsEditor.getCursorPosition();
+        session.insert(cursor, snippet);
+        jsEditor.focus();
+      }
+      
+      jsSnippetsSelect.value = "";
+    });
+  }
 }
 
 function renderSidebar() {
   webList.innerHTML = "";
   providers.forEach((p) => {
+    if (p.deleted) return;
     const li = document.createElement("li");
     li.className = `web-item ${p.id === selectedId ? "active" : ""}`;
     
@@ -218,8 +407,7 @@ function renderSidebar() {
       icon.src = `provider-icons/${p.id}.svg`;
     } else {
       try {
-        const domain = new URL(p.url).hostname;
-        icon.src = `https://www.google.com/s2/favicons?domain=${domain}&sz=62`;
+        icon.src = `chrome-extension://${chrome.runtime.id}/_favicon/?pageUrl=${encodeURIComponent(p.url)}&size=32`;
       } catch (e) {
         icon.src = "";
       }
@@ -244,7 +432,7 @@ function selectWeb(id) {
   renderSidebar();
   
   const provider = providers.find((p) => p.id === id);
-  if (!provider) return;
+  if (!provider || provider.deleted) return;
   
   emptyView.classList.add("hidden");
   editorView.classList.remove("hidden");
@@ -252,6 +440,9 @@ function selectWeb(id) {
   panelTitle.textContent = `Edit ${provider.name}`;
   webName.value = provider.name;
   webUrl.value = provider.url;
+  
+  selectedZoom = provider.zoom || 100;
+  zoomVal.textContent = `${selectedZoom}%`;
   
   const assets = customAssets[id] || { js: "", css: "" };
   jsEditor.setValue(assets.js || "", -1);
@@ -263,11 +454,16 @@ addBtn.addEventListener("click", () => {
   const newProvider = {
     id: newId,
     name: "New Website",
-    url: "https://"
+    url: "https://",
+    zoom: 100,
+    updatedAt: Date.now()
   };
   
   providers.push(newProvider);
   chrome.storage.local.set({ providers }, () => {
+    try {
+      localStorage.setItem("providers", JSON.stringify(providers));
+    } catch (e) {}
     selectWeb(newId);
   });
 });
@@ -278,18 +474,23 @@ saveBtn.addEventListener("click", () => {
   const providerIndex = providers.findIndex((p) => p.id === selectedId);
   if (providerIndex === -1) return;
   
-  const oldUrl = providers[providerIndex].url;
   const newUrl = webUrl.value.trim();
   
   providers[providerIndex].name = webName.value.trim();
   providers[providerIndex].url = newUrl;
+  providers[providerIndex].zoom = selectedZoom;
+  providers[providerIndex].updatedAt = Date.now();
   
   customAssets[selectedId] = {
     js: jsEditor.getValue(),
-    css: cssEditor.getValue()
+    css: cssEditor.getValue(),
+    updatedAt: Date.now()
   };
   
   chrome.storage.local.set({ providers, custom_assets: customAssets, force_refresh: Date.now() }, () => {
+    try {
+      localStorage.setItem("providers", JSON.stringify(providers));
+    } catch (e) {}
     updateDynamicRules();
     renderSidebar();
     selectWeb(selectedId);
@@ -299,10 +500,26 @@ saveBtn.addEventListener("click", () => {
 deleteBtn.addEventListener("click", () => {
   if (!selectedId) return;
   
-  providers = providers.filter((p) => p.id !== selectedId);
-  delete customAssets[selectedId];
+  const provider = providers.find((p) => p.id === selectedId);
+  if (provider) {
+    provider.deleted = true;
+    provider.updatedAt = Date.now();
+  }
+  
+  if (customAssets[selectedId]) {
+    customAssets[selectedId].deleted = true;
+    customAssets[selectedId].updatedAt = Date.now();
+  } else {
+    customAssets[selectedId] = {
+      deleted: true,
+      updatedAt: Date.now()
+    };
+  }
   
   chrome.storage.local.set({ providers, custom_assets: customAssets }, () => {
+    try {
+      localStorage.setItem("providers", JSON.stringify(providers));
+    } catch (e) {}
     updateDynamicRules();
     selectedId = null;
     editorView.classList.add("hidden");

@@ -23,19 +23,32 @@
         <ul id="web-list" class="web-list"></ul>
         <div class="sidebar-footer">
           <div id="sync-profile" class="sync-profile hidden">
-            <img id="user-avatar" class="user-avatar" src="" alt="" />
-            <div class="user-info">
-              <span id="user-name">User Name</span>
-              <span id="sync-status">Connected</span>
-              <span id="last-sync-time" style="font-size: 9px; color: var(--text-muted); margin-top: 2px;"></span>
+            <div class="sync-profile-card">
+              <div class="user-avatar-wrapper">
+                <img id="user-avatar" class="user-avatar" src="" alt="User Avatar" />
+                <span class="status-indicator"></span>
+              </div>
+              <div class="user-info">
+                <span id="user-name">User Name</span>
+                <div class="sync-meta">
+                  <span id="sync-status">Synced</span>
+                  <span id="last-sync-time"></span>
+                </div>
+              </div>
             </div>
-            <div class="sync-profile-actions" style="display: flex; flex-direction: column; gap: 4px; align-items: flex-end;">
-              <button id="manual-sync-btn" class="icon-btn-text" title="Sync now">Sync now</button>
-              <button id="logout-btn" class="icon-btn-text" title="Sign out">Sign out</button>
+            <div class="sync-profile-actions">
+              <button id="manual-sync-btn" class="sync-action-btn sync-now-btn" title="Sync now">
+                <svg viewBox="0 0 24 24" width="12" height="12"><path d="M17.65 6.35A7.958 7.958 0 0 0 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0 1 12 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z" fill="currentColor"/></svg>
+                Sync Now
+              </button>
+              <button id="logout-btn" class="sync-action-btn sign-out-btn" title="Sign out">
+                <svg viewBox="0 0 24 24" width="12" height="12"><path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z" fill="currentColor"/></svg>
+                Sign Out
+              </button>
             </div>
           </div>
           <button id="login-btn" class="sync-btn hidden">
-            <svg class="google-icon" viewBox="0 0 24 24" width="16" height="16" style="margin-right: 8px;">
+            <svg class="google-icon" viewBox="0 0 24 24" width="16" height="16">
               <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
               <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
               <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" fill="#FBBC05"/>
@@ -60,11 +73,28 @@
             <label for="web-url">URL</label>
             <input type="url" id="web-url" placeholder="https://chatgpt.com" />
           </div>
+          <div class="form-group">
+            <label>Zoom Level</label>
+            <div class="zoom-controls">
+              <button type="button" id="zoom-out-btn" class="zoom-btn">-</button>
+              <span id="zoom-val">100%</span>
+              <button type="button" id="zoom-in-btn" class="zoom-btn">+</button>
+            </div>
+          </div>
           <div class="form-group flex-group">
             <div class="code-editor-wrapper">
               <div class="editor-header">
                 <label>Custom JS</label>
-                <button type="button" id="format-js-btn" class="format-btn">Format</button>
+                <div style="display: flex; align-items: center;">
+                  <select id="js-snippets-select" class="snippet-select">
+                    <option value="" disabled selected>Snippets</option>
+                    <option value="autofocus">Auto-focus Input</option>
+                    <option value="autoclick">Auto Click Button</option>
+                    <option value="darkmode">Dark Mode Helper</option>
+                    <option value="scroll">Scroll to Bottom</option>
+                  </select>
+                  <button type="button" id="format-js-btn" class="format-btn">Format</button>
+                </div>
               </div>
               <div id="web-js" class="code-editor-container"></div>
             </div>
@@ -84,6 +114,18 @@
           <p>Select a website from the sidebar to customize or add a new one.</p>
         </div>
       </main>
+    <div class="sync-setup-overlay hidden" id="sync-setup-overlay">
+      <div class="sync-setup-modal">
+        <h3>Google Drive Sync Setup</h3>
+        <p>
+          Please upload your Google Cloud credentials JSON file (e.g. <code>client_secret_*.json</code>) to enable backup and sync.
+        </p>
+        <div class="sync-setup-actions">
+          <input type="file" id="input-sync-credentials" accept=".json" style="display: none;" />
+          <button class="primary-btn" id="btn-upload-sync-json" style="flex: 1;">Choose File</button>
+          <button class="secondary-btn" id="btn-cancel-sync-setup">Cancel</button>
+        </div>
+      </div>
     </div>
     <script src="ace.js"></script>
     <script src="ext-language_tools.js"></script>

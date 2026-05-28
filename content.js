@@ -73,11 +73,10 @@ function applyAssets(providers, assets) {
 
   if (providerAssets.js) {
     try {
-      const script = document.createElement("script");
-      script.textContent = providerAssets.js;
-      (document.head || document.documentElement).appendChild(script);
+      const runFn = new Function(providerAssets.js);
+      runFn();
     } catch (e) {
-      console.error(e);
+      console.error("LuminaHub: Custom JS execution error:", e);
     }
   }
 }
@@ -85,36 +84,77 @@ function applyAssets(providers, assets) {
 chrome.storage.local.get(["providers", "custom_assets"], (res) => {
   const providers = res.providers || [];
   const assets = res.custom_assets || {};
-  const currentUrl = window.location.href;
 
-  if (currentUrl.includes("copilot.microsoft.com")) {
-    const defaultCopilotStyle = document.createElement("style");
-    defaultCopilotStyle.textContent = `
-      #cookie-banner,
-      .max-w-cookie-banner,
-      [data-testid="cookie-banner-accept-button"],
-      [data-testid="cookie-banner-reject-button"] {
-        display: none !important;
+  // Hide custom self-hosted cookie banners
+  const style = document.createElement("style");
+  style.textContent = `
+    #modal-cookie-consent-banner-mobile,
+    [data-testid="modal-cookie-consent-banner-mobile"],
+    #cookie-banner,
+    .max-w-cookie-banner {
+      display: none !important;
+      pointer-events: none !important;
+    }
+    body {
+      pointer-events: auto !important;
+      overflow: auto !important;
+    }
+  `;
+  (document.head || document.documentElement).appendChild(style);
+
+  // Generic Cookie Consent Auto-Clicker
+  const acceptButtonTexts = [
+    "accept all",
+    "accept all cookies",
+    "accept cookies",
+    "agree",
+    "allow all",
+    "allow cookies",
+    "chấp nhận tất cả",
+    "chấp nhận cookie",
+    "đồng ý"
+  ];
+
+  const bannerSelectors = [
+    '[id*="cookie" i]', '[class*="cookie" i]',
+    '[id*="consent" i]', '[class*="consent" i]',
+    '[id*="onetrust" i]', '[class*="onetrust" i]',
+    '[data-testid*="cookie" i]', '[data-testid*="consent" i]'
+  ];
+
+  function autoAcceptCookies() {
+    for (const selector of bannerSelectors) {
+      try {
+        const banners = document.querySelectorAll(selector);
+        for (const banner of banners) {
+          const buttons = banner.querySelectorAll("button, [role='button']");
+          for (const btn of buttons) {
+            const txt = btn.textContent.trim().toLowerCase();
+            if (acceptButtonTexts.includes(txt) || acceptButtonTexts.some(pattern => txt.includes(pattern))) {
+              btn.click();
+              return;
+            }
+          }
+        }
+      } catch (e) {}
+    }
+
+    // Fallback: search all buttons on page
+    try {
+      const allButtons = document.querySelectorAll("button, [role='button']");
+      for (const btn of allButtons) {
+        const txt = btn.textContent.trim().toLowerCase();
+        if (txt === "accept all" || txt === "accept all cookies") {
+          btn.click();
+          return;
+        }
       }
-    `;
-    (document.head || document.documentElement).appendChild(defaultCopilotStyle);
+    } catch (e) {}
   }
 
-  if (currentUrl.includes("chatgpt.com")) {
-    const defaultChatGptStyle = document.createElement("style");
-    defaultChatGptStyle.textContent = `
-      #modal-cookie-consent-banner-mobile,
-      [data-testid="modal-cookie-consent-banner-mobile"] {
-        display: none !important;
-        pointer-events: none !important;
-      }
-      body {
-        pointer-events: auto !important;
-        overflow: auto !important;
-      }
-    `;
-    (document.head || document.documentElement).appendChild(defaultChatGptStyle);
-  }
+  autoAcceptCookies();
+  const otInterval = setInterval(autoAcceptCookies, 1000);
+  setTimeout(() => clearInterval(otInterval), 10000);
 
   applyAssets(providers, assets);
 });
@@ -154,3 +194,9 @@ try {
     });
   }
 } catch (e) {}
+
+window.addEventListener("beforeunload", () => {
+  try {
+    chrome.runtime.sendMessage({ type: "LUMINA_PAGE_LOADING" });
+  } catch (e) {}
+});

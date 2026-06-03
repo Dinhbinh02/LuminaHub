@@ -56,7 +56,7 @@ body {
 .app-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 6px;
   height: 48px;
   padding: 0 12px;
   background: var(--bg-header);
@@ -91,131 +91,125 @@ body {
   color: var(--text-muted);
 }
 
-.left-controls {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  flex: 1;
-}
-
-.center-controls {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  flex: 2;
-}
-
-.right-controls {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  flex: 1;
-}
-
-.custom-dropdown {
+.address-bar-wrapper {
   position: relative;
-  width: 150px;
+  flex: 1;
+  min-width: 0;
 }
 
-.dropdown-trigger {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
+#address-input {
+  width: 100%;
   font-family: var(--font-family);
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-primary);
-  background: transparent;
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 500;
   padding: 6px 12px;
-  cursor: pointer;
-  user-select: none;
+  border-radius: 20px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  outline: none;
   transition: var(--transition);
+  text-align: center;
 }
 
-.dropdown-trigger:hover {
+#address-input:focus {
   border-color: var(--brand-violet);
-  background: rgba(0, 0, 0, 0.02);
+  background: var(--bg-header);
+  box-shadow: 0 0 8px rgba(99, 72, 245, 0.15);
+  text-align: left;
 }
 
-[data-theme="dark"] .dropdown-trigger:hover {
-  background: rgba(255, 255, 255, 0.02);
-}
-
-.dropdown-trigger svg {
-  color: var(--text-muted);
-  transition: var(--transition);
-}
-
-.custom-dropdown.open .dropdown-trigger svg {
-  transform: rotate(180deg);
-}
-
-.dropdown-menu {
+.suggestions-dropdown {
   position: absolute;
   top: calc(100% + 4px);
-  left: 50%;
-  transform: translateX(-50%);
-  min-width: 140px;
+  left: 0;
+  width: 100%;
   background: #ffffff;
   border: 1px solid var(--border-color);
   border-radius: 8px;
   box-shadow: var(--shadow-md);
-  list-style: none;
-  padding: 4px;
-  display: none;
+  padding: 8px;
+  display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
   z-index: 1000;
+  max-height: 240px;
+  overflow-y: auto;
+  scrollbar-width: none; /* For Firefox */
+}
+
+.suggestions-dropdown::-webkit-scrollbar {
+  display: none; /* For Chrome, Safari, Opera */
 }
 
 @media (prefers-color-scheme: dark) {
-  .dropdown-menu {
+  .suggestions-dropdown {
     background: hsl(226, 32%, 12%);
   }
 }
 
-.custom-dropdown.open .dropdown-menu {
-  display: flex;
+.suggestions-dropdown.hidden {
+  display: none !important;
 }
 
-.dropdown-item {
+.suggestion-item {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 8px;
+  gap: 10px;
+  padding: 10px 14px;
   font-size: 12px;
   font-weight: 500;
   color: var(--text-primary);
   border-radius: 6px;
   cursor: pointer;
   transition: var(--transition);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.4;
 }
 
-.dropdown-item:hover {
+.suggestion-item:hover {
   background: rgba(0, 0, 0, 0.04);
 }
 
-[data-theme="dark"] .dropdown-item:hover {
+[data-theme="dark"] .suggestion-item:hover {
   background: rgba(255, 255, 255, 0.05);
 }
 
-.dropdown-item.active {
-  background: var(--brand-violet);
-  color: #ffffff;
+.suggestion-item.matched-rule {
+  color: var(--brand-violet);
+  font-weight: 600;
 }
 
-.dropdown-item.active:hover {
-  background: var(--brand-violet);
-}
-
-.dropdown-item img {
+.suggestion-item img {
   width: 14px;
   height: 14px;
   border-radius: 2px;
   object-fit: contain;
+}
+
+.suggestion-item svg {
+  width: 14px;
+  height: 14px;
+}
+
+.suggestion-section-title {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  letter-spacing: 0.5px;
+  padding: 8px 12px 4px 12px;
+  border-top: 1px solid var(--border-color);
+  margin-top: 8px;
+  margin-bottom: 2px;
+}
+
+.suggestion-section-title:first-child {
+  border-top: none;
+  padding-top: 2px;
+  margin-top: 0;
 }
 
 .icon-btn {

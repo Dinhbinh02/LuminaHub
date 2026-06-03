@@ -18,7 +18,13 @@
             <img class="logo-img" src="icons/icon48.png" alt="LuminaHub" />
             <h2>Lumina<span>Hub</span></h2>
           </div>
-          <button id="add-btn" class="primary-btn">Add Web</button>
+          <div class="rules-header">
+            <span class="rules-count-label">RULES (<span id="rules-count">0</span>)</span>
+            <button id="add-btn" class="text-link-btn">New rule</button>
+          </div>
+          <div class="search-wrapper">
+            <input type="text" id="search-input" placeholder="Find..." />
+          </div>
         </div>
         <ul id="web-list" class="web-list"></ul>
         <div class="sidebar-footer">
@@ -38,11 +44,19 @@
             </div>
             <div class="sync-profile-actions">
               <button id="manual-sync-btn" class="sync-action-btn sync-now-btn" title="Sync now">
-                <svg viewBox="0 0 24 24" width="12" height="12"><path d="M17.65 6.35A7.958 7.958 0 0 0 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0 1 12 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z" fill="currentColor"/></svg>
+                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M23 4v6h-6"></path>
+                  <path d="M1 20v-6h6"></path>
+                  <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+                </svg>
                 Sync Now
               </button>
               <button id="logout-btn" class="sync-action-btn sign-out-btn" title="Sign out">
-                <svg viewBox="0 0 24 24" width="12" height="12"><path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z" fill="currentColor"/></svg>
+                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                  <polyline points="16 17 21 12 16 7"></polyline>
+                  <line x1="21" y1="12" x2="9" y2="12"></line>
+                </svg>
                 Sign Out
               </button>
             </div>
@@ -59,32 +73,58 @@
         </div>
       </aside>
       <main class="main-panel">
-
         <div id="editor-view" class="editor-view hidden">
           <div class="panel-header">
-            <h3 id="panel-title">Edit Website</h3>
-            <button id="delete-btn" class="danger-btn">Delete</button>
-          </div>
-          <div class="form-group">
-            <label for="web-name">Name</label>
-            <input type="text" id="web-name" placeholder="e.g., ChatGPT" />
-          </div>
-          <div class="form-group">
-            <label for="web-url">URL</label>
-            <input type="url" id="web-url" placeholder="https://chatgpt.com" />
-          </div>
-          <div class="form-group">
-            <label>Zoom Level</label>
-            <div class="zoom-controls">
-              <button type="button" id="zoom-out-btn" class="zoom-btn">-</button>
-              <span id="zoom-val">100%</span>
-              <button type="button" id="zoom-in-btn" class="zoom-btn">+</button>
+            <div class="header-inputs">
+              <div class="form-group flex-1">
+                <label for="web-name">Rule name</label>
+                <input type="text" id="web-name" placeholder="ex. My new rule" />
+              </div>
+              <div class="form-group flex-2">
+                <label for="web-url">URL pattern</label>
+                <input type="text" id="web-url" placeholder="https://site.com/*" />
+              </div>
+            </div>
+            <div class="header-actions">
+              <button id="save-btn" class="primary-btn">Save</button>
+              <button id="delete-btn" class="danger-btn">Delete</button>
             </div>
           </div>
+          
+          <div class="settings-row">
+            <div class="toggle-group">
+              <span class="toggle-label">Rule Active</span>
+              <label class="switch">
+                <input type="checkbox" id="rule-enabled" checked />
+                <span class="slider round"></span>
+              </label>
+            </div>
+            <div class="toggle-group">
+              <span class="toggle-label">Show in Side Panel</span>
+              <label class="switch">
+                <input type="checkbox" id="rule-sidepanel" checked />
+                <span class="slider round"></span>
+              </label>
+            </div>
+            <div class="zoom-group" id="zoom-group-container">
+              <span class="toggle-label">Side Panel Zoom</span>
+              <div class="zoom-controls">
+                <button type="button" id="zoom-out-btn" class="zoom-btn">-</button>
+                <span id="zoom-val">100%</span>
+                <button type="button" id="zoom-in-btn" class="zoom-btn">+</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="target-tabs">
+            <button id="tab-regular" class="tab-btn active">🌐 Regular Pages</button>
+            <button id="tab-sidepanel" class="tab-btn">📱 Side Panel</button>
+          </div>
+
           <div class="form-group flex-group">
             <div class="code-editor-wrapper">
               <div class="editor-header">
-                <label>Custom JS</label>
+                <label id="js-label">JavaScript</label>
                 <div style="display: flex; align-items: center;">
                   <select id="js-snippets-select" class="snippet-select">
                     <option value="" disabled selected>Snippets</option>
@@ -100,20 +140,18 @@
             </div>
             <div class="code-editor-wrapper">
               <div class="editor-header">
-                <label>Custom CSS</label>
+                <label id="css-label">SCSS or CSS</label>
                 <button type="button" id="format-css-btn" class="format-btn">Format</button>
               </div>
               <div id="web-css" class="code-editor-container"></div>
             </div>
           </div>
-          <div class="actions">
-            <button id="save-btn" class="primary-btn">Save Changes</button>
-          </div>
         </div>
         <div id="empty-view" class="empty-view">
-          <p>Select a website from the sidebar to customize or add a new one.</p>
+          <p>Select a rule from the sidebar to customize or create a new one.</p>
         </div>
       </main>
+    </div>
     <div class="sync-setup-overlay hidden" id="sync-setup-overlay">
       <div class="sync-setup-modal">
         <h3>Google Drive Sync Setup</h3>

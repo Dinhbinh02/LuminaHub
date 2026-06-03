@@ -43,37 +43,68 @@ document.addEventListener("keydown", (event) => {
   }
 });
 
-function findMatchedProvider(providers) {
-  const currentHostname = window.location.hostname;
-  return providers.find((p) => {
-    try {
-      return new URL(p.url).hostname === currentHostname;
-    } catch (e) {
-      return false;
+function matchUrl(pattern, urlStr) {
+  try {
+    if (!pattern.includes("*") && !pattern.includes("/")) {
+      const hostname = new URL("https://" + pattern).hostname;
+      return new URL(urlStr).hostname === hostname;
     }
+    const escaped = pattern.replace(/[.+^${}()|[\]\\]/g, '\\$&');
+    const regexStr = "^" + escaped.replace(/\*/g, '.*') + "$";
+    const regex = new RegExp(regexStr, 'i');
+    return regex.test(urlStr);
+  } catch (e) {
+    return false;
+  }
+}
+
+function findMatchedProvider(providers) {
+  const currentUrl = window.location.href;
+  return providers.find((p) => {
+    if (p.deleted || p.enabled === false) return false;
+    return matchUrl(p.url, currentUrl);
   });
 }
 
+function checkIsSidePanel() {
+  if (window.self !== window.top) {
+    if (window.location.ancestorOrigins) {
+      return Array.from(window.location.ancestorOrigins).some(origin => origin.startsWith("chrome-extension://"));
+    }
+    return true;
+  }
+  return false;
+}
+
 function applyAssets(providers, assets) {
+  console.log("LuminaHub: Running content script on", window.location.href);
   const matchedProvider = findMatchedProvider(providers);
+  console.log("LuminaHub: Matched provider =", matchedProvider);
   if (!matchedProvider) return;
 
   const providerAssets = assets[matchedProvider.id];
+  console.log("LuminaHub: Assets found for provider =", providerAssets);
   if (!providerAssets) return;
+
+  const isSidePanel = checkIsSidePanel();
+  console.log("LuminaHub: Is side panel iframe =", isSidePanel);
+  const cssToApply = isSidePanel ? providerAssets.sidepanelCss : providerAssets.css;
+  const jsToApply = isSidePanel ? providerAssets.sidepanelJs : providerAssets.js;
+  console.log("LuminaHub: Applying CSS =", cssToApply, "JS =", jsToApply);
 
   const existingStyle = document.getElementById("__luminahub_css__");
   if (existingStyle) existingStyle.remove();
 
-  if (providerAssets.css) {
+  if (cssToApply) {
     const style = document.createElement("style");
     style.id = "__luminahub_css__";
-    style.textContent = providerAssets.css;
+    style.textContent = cssToApply;
     (document.head || document.documentElement).appendChild(style);
   }
 
-  if (providerAssets.js) {
+  if (jsToApply) {
     try {
-      const runFn = new Function(providerAssets.js);
+      const runFn = new Function(jsToApply);
       runFn();
     } catch (e) {
       console.error("LuminaHub: Custom JS execution error:", e);
@@ -161,12 +192,12 @@ chrome.storage.local.get(["providers", "custom_assets"], (res) => {
 
 try {
   let lastUrl = window.location.href;
-  chrome.runtime.sendMessage({ type: "LUMINA_URL_CHANGED", url: lastUrl });
+  chrome.runtime.sendMessage({ type: "LUMINA_URL_CHANGED", url: lastUrl, isSidePanel: checkIsSidePanel() });
   const intervalId = setInterval(() => {
     try {
       if (window.location.href !== lastUrl) {
         lastUrl = window.location.href;
-        chrome.runtime.sendMessage({ type: "LUMINA_URL_CHANGED", url: lastUrl });
+        chrome.runtime.sendMessage({ type: "LUMINA_URL_CHANGED", url: lastUrl, isSidePanel: checkIsSidePanel() });
       }
     } catch (e) {
       clearInterval(intervalId);
@@ -197,6 +228,6 @@ try {
 
 window.addEventListener("beforeunload", () => {
   try {
-    chrome.runtime.sendMessage({ type: "LUMINA_PAGE_LOADING" });
+    chrome.runtime.sendMessage({ type: "LUMINA_PAGE_LOADING", isSidePanel: checkIsSidePanel() });
   } catch (e) {}
 });

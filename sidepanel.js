@@ -1,13 +1,4 @@
-const DEFAULT_PROVIDERS = [
-  { id: "deepseek", name: "DeepSeek", url: "https://chat.deepseek.com" },
-  { id: "mistral", name: "Mistral", url: "https://chat.mistral.ai" },
-  { id: "meta", name: "Meta AI", url: "https://www.meta.ai" },
-  { id: "chatgpt", name: "ChatGPT", url: "https://chatgpt.com" },
-  { id: "claude", name: "Claude", url: "https://claude.ai" },
-  { id: "gemini", name: "Gemini", url: "https://gemini.google.com" },
-  { id: "copilot", name: "Copilot", url: "https://copilot.microsoft.com" },
-  { id: "grok", name: "Grok", url: "https://grok.com" },
-];
+const DEFAULT_PROVIDERS = [];
 
 let providers = [];
 try {
@@ -21,12 +12,31 @@ try {
   providers = [...DEFAULT_PROVIDERS];
 }
 let activeWebId = null;
+let currentFullUrl = "";
 
-const dropdown = document.getElementById("web-dropdown");
-const trigger = document.getElementById("dropdown-trigger");
-const selectedText = document.getElementById("selected-web-name");
-const menu = document.getElementById("dropdown-menu");
-const overlay = document.getElementById("dropdown-overlay");
+function formatDisplayUrl(url) {
+  if (!url) return "";
+  if (url.startsWith("https://www.google.com/search?q=")) {
+    try {
+      const urlObj = new URL(url);
+      const query = urlObj.searchParams.get("q");
+      if (query) return query;
+    } catch (e) {}
+  }
+  return url.replace(/^https?:\/\/(www\.)?/i, "");
+}
+
+function setAddressBarValue(url) {
+  currentFullUrl = url;
+  if (document.activeElement !== addressInput) {
+    addressInput.value = formatDisplayUrl(url);
+  } else {
+    addressInput.value = url;
+  }
+}
+
+const addressInput = document.getElementById("address-input");
+const suggestionsDropdown = document.getElementById("suggestions-dropdown");
 
 const frame = document.getElementById("web-frame");
 const loader = document.getElementById("loader");
@@ -42,19 +52,17 @@ function showLoader() {
   frame.style.opacity = "0";
   frame.style.pointerEvents = "none";
 
-  // Reset progress bar width
   progressFill.style.transition = "none";
   progressFill.style.width = "0%";
   progressFill.offsetHeight; // Force reflow
 
-  // Load to 90% slowly using ease-out cubic-bezier
   progressFill.style.transition = "width 3.5s cubic-bezier(0.08, 0.82, 0.17, 1)";
   progressFill.style.width = "90%";
 
   if (loaderTimeout) clearTimeout(loaderTimeout);
   loaderTimeout = setTimeout(() => {
     hideLoader();
-  }, 8000); // 8s backup safety timeout
+  }, 8000);
 }
 
 function hideLoader() {
@@ -63,11 +71,9 @@ function hideLoader() {
     loaderTimeout = null;
   }
 
-  // Quickly complete progress to 100%
   progressFill.style.transition = "width 0.2s ease-out";
   progressFill.style.width = "100%";
 
-  // Hide loader and show frame after completion transition
   setTimeout(() => {
     loader.classList.add("hidden");
     frame.style.opacity = "1";
@@ -75,35 +81,44 @@ function hideLoader() {
   }, 200);
 }
 
-function preRender() {
-  const activeProviders = providers.filter(p => !p.deleted);
-  let activeId = null;
-  try {
-    activeId = localStorage.getItem("selectedProvider");
-  } catch (e) {}
-  if (!activeId || !activeProviders.some(p => p.id === activeId)) {
-    activeId = activeProviders[0] ? activeProviders[0].id : null;
-  }
-  buildDropdown();
-  if (activeId) {
-    selectWebSync(activeId);
-  }
-}
-
-function selectWebSync(id) {
+function selectWeb(id, forceBaseUrl = false) {
   const provider = providers.find((p) => p.id === id);
   if (!provider) return;
 
   activeWebId = id;
-  selectedText.textContent = provider.name;
   frame.style.zoom = (provider.zoom || 100) / 100;
 
-  let cachedUrl = null;
+  if (forceBaseUrl) {
+    showLoader();
+    frame.src = provider.url;
+    setAddressBarValue(provider.url);
+    chrome.storage.local.set({ [`last_url_${id}`]: provider.url });
+    try {
+      localStorage.setItem(`last_url_${id}`, provider.url);
+    } catch (e) {}
+  } else {
+    const cachedUrl = localStorage.getItem(`last_url_${id}`) || provider.url;
+    if (frame.src !== cachedUrl) {
+      showLoader();
+      frame.src = cachedUrl;
+    }
+    setAddressBarValue(cachedUrl);
+    chrome.storage.local.get([`last_url_${id}`], (result) => {
+      const urlToLoad = result[`last_url_${id}`] || provider.url;
+      if (frame.src !== urlToLoad) {
+        frame.src = urlToLoad;
+      }
+      setAddressBarValue(urlToLoad);
+      try {
+        localStorage.setItem(`last_url_${id}`, urlToLoad);
+      } catch (e) {}
+    });
+  }
+
+  chrome.storage.local.set({ selectedProvider: id });
   try {
-    cachedUrl = localStorage.getItem(`last_url_${id}`);
+    localStorage.setItem("selectedProvider", id);
   } catch (e) {}
-  const urlToLoad = cachedUrl || provider.url;
-  frame.src = urlToLoad;
 }
 
 function init() {
@@ -120,126 +135,234 @@ function init() {
       } catch (e) {}
     }
 
-    const activeProviders = providers.filter(p => !p.deleted);
+    const activeProviders = providers.filter(p => !p.deleted && p.inSidePanel !== false);
     const activeId = result.selectedProvider || (activeProviders[0] ? activeProviders[0].id : null);
-    buildDropdown();
 
     if (activeId && activeProviders.some(p => p.id === activeId)) {
       selectWeb(activeId);
     } else if (activeProviders.length > 0) {
       selectWeb(activeProviders[0].id);
+    } else {
+      navigate("https://www.google.com");
     }
   });
 }
 
-function buildDropdown() {
-  menu.innerHTML = "";
-  providers.forEach((p) => {
-    if (p.deleted) return;
-    const li = document.createElement("li");
-    li.className = `dropdown-item ${p.id === activeWebId ? "active" : ""}`;
+function matchUrl(pattern, urlStr) {
+  try {
+    if (!pattern.includes("*") && !pattern.includes("/")) {
+      const hostname = new URL("https://" + pattern).hostname;
+      return new URL(urlStr).hostname === hostname;
+    }
+    const escaped = pattern.replace(/[.+^${}()|[\]\\]/g, '\\$&');
+    const regexStr = "^" + escaped.replace(/\*/g, '.*') + "$";
+    const regex = new RegExp(regexStr, 'i');
+    return regex.test(urlStr);
+  } catch (e) {
+    return false;
+  }
+}
 
-    const icon = document.createElement("img");
-    if (["deepseek", "mistral", "meta", "chatgpt", "claude", "gemini", "copilot", "grok"].includes(p.id)) {
-      icon.src = `provider-icons/${p.id}.svg`;
+function matchAndActivateProvider(url) {
+  const matched = providers.find(p => !p.deleted && p.enabled !== false && matchUrl(p.url, url));
+  if (matched) {
+    activeWebId = matched.id;
+    frame.style.zoom = (matched.zoom || 100) / 100;
+    chrome.storage.local.set({ selectedProvider: matched.id });
+    try {
+      localStorage.setItem("selectedProvider", matched.id);
+    } catch (e) {}
+  } else {
+    activeWebId = null;
+    frame.style.zoom = 1.0;
+  }
+}
+
+function navigate(input) {
+  input = input.trim();
+  if (!input) return;
+
+  let targetUrl = "";
+  // Check if query is a URL or domain pattern
+  const isUrlPattern = /^(https?:\/\/)?([\da-z\.-]+)\.([a-z\.]{2,6})([\/\w \.-]*)*\/?$/i.test(input);
+  if (isUrlPattern || input.startsWith("localhost") || input.startsWith("http://") || input.startsWith("https://")) {
+    if (!/^https?:\/\//i.test(input)) {
+      targetUrl = "https://" + input;
     } else {
+      targetUrl = input;
+    }
+  } else {
+    targetUrl = `https://www.google.com/search?q=${encodeURIComponent(input)}`;
+  }
+
+  showLoader();
+  frame.src = targetUrl;
+  setAddressBarValue(targetUrl);
+
+  matchAndActivateProvider(targetUrl);
+}
+
+function updateHistory(url) {
+  if (!url || url === "about:blank" || url.startsWith("chrome-extension://") || url.includes("google.com/search")) return;
+  chrome.storage.local.get(["history"], (result) => {
+    let history = result.history || {};
+    if (!history[url]) {
+      let displayName = url;
       try {
-        icon.src = `chrome-extension://${chrome.runtime.id}/_favicon/?pageUrl=${encodeURIComponent(p.url)}&size=32`;
+        const urlObj = new URL(url);
+        displayName = urlObj.hostname + (urlObj.pathname !== "/" ? urlObj.pathname : "");
+      } catch (e) {}
+      history[url] = { url: url, count: 0, lastVisited: Date.now(), name: displayName };
+    }
+    history[url].count += 1;
+    history[url].lastVisited = Date.now();
+
+    // Limit history size to 500 entries
+    const entries = Object.entries(history);
+    if (entries.length > 500) {
+      entries.sort((a, b) => a[1].lastVisited - b[1].lastVisited);
+      const toDelete = entries.slice(0, entries.length - 500);
+      toDelete.forEach(([k]) => delete history[k]);
+    }
+
+    chrome.storage.local.set({ history: history });
+  });
+}
+
+let autocompleteTimeout = null;
+function handleAutocomplete(query) {
+  if (autocompleteTimeout) clearTimeout(autocompleteTimeout);
+
+  if (!query.trim()) {
+    suggestionsDropdown.classList.add("hidden");
+    return;
+  }
+
+  autocompleteTimeout = setTimeout(() => {
+    // 1. Search locally matched rules
+    const localMatches = providers.filter(p => !p.deleted && (p.name.toLowerCase().includes(query.toLowerCase()) || p.url.toLowerCase().includes(query.toLowerCase())));
+    
+    // 2. Search history/frequently visited
+    chrome.storage.local.get(["history"], (result) => {
+      const history = result.history || {};
+      const historyMatches = Object.values(history)
+        .filter(h => h.url.toLowerCase().includes(query.toLowerCase()) || (h.name && h.name.toLowerCase().includes(query.toLowerCase())))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 5);
+
+      // 3. Fetch predictions from Google Autocomplete service
+      const googleSuggestUrl = `https://suggestqueries.google.com/complete/search?client=chrome&q=${encodeURIComponent(query)}`;
+      
+      fetch(googleSuggestUrl)
+        .then(res => res.json())
+        .then(data => {
+          const rawSuggestions = data[1] || [];
+          const googleSuggestions = rawSuggestions.filter(item => {
+            const trimmed = item.trim();
+            return !/^https?:\/\//i.test(trimmed) && !/^www\./i.test(trimmed) && !/\.[a-z]{2,6}(\/|$)/i.test(trimmed);
+          });
+          renderSuggestions(localMatches, historyMatches, googleSuggestions);
+        })
+        .catch(err => {
+          console.error("LuminaHub: Suggestions fetch error", err);
+          renderSuggestions(localMatches, historyMatches, []);
+        });
+    });
+  }, 150);
+}
+
+function renderSuggestions(localMatches, historyMatches, googleSuggestions) {
+  suggestionsDropdown.innerHTML = "";
+
+  if (historyMatches.length === 0 && googleSuggestions.length === 0) {
+    suggestionsDropdown.classList.add("hidden");
+    return;
+  }
+
+  suggestionsDropdown.classList.remove("hidden");
+
+  // Frequently Visited Section
+  if (historyMatches.length > 0) {
+    const title = document.createElement("div");
+    title.className = "suggestion-section-title";
+    title.textContent = "Frequently Visited";
+    suggestionsDropdown.appendChild(title);
+
+    historyMatches.forEach(h => {
+      const item = document.createElement("div");
+      item.className = "suggestion-item";
+
+      const icon = document.createElement("img");
+      try {
+        icon.src = `chrome-extension://${chrome.runtime.id}/_favicon/?pageUrl=${encodeURIComponent(h.url)}&size=32`;
       } catch (e) {
         icon.src = "";
       }
-    }
 
-    const span = document.createElement("span");
-    span.textContent = p.name;
+      const text = document.createElement("span");
+      // Clean display name of history item
+      text.textContent = formatDisplayUrl(h.name || h.url);
+      text.title = h.url; // Show full URL on hover
 
-    li.appendChild(icon);
-    li.appendChild(span);
+      item.appendChild(icon);
+      item.appendChild(text);
 
-    li.addEventListener("click", (e) => {
-      e.stopPropagation();
-      selectWeb(p.id, true);
-      dropdown.classList.remove("open");
-      overlay.classList.add("hidden");
-    });
+      item.addEventListener("click", () => {
+        navigate(h.url);
+        suggestionsDropdown.classList.add("hidden");
+      });
 
-    menu.appendChild(li);
-  });
-}
-
-function selectWeb(id, forceBaseUrl = false) {
-  const provider = providers.find((p) => p.id === id);
-  if (!provider) return;
-
-  activeWebId = id;
-  selectedText.textContent = provider.name;
-  
-  // Set zoom level
-  frame.style.zoom = (provider.zoom || 100) / 100;
-
-  if (forceBaseUrl) {
-    showLoader();
-    frame.src = provider.url;
-    chrome.storage.local.set({ [`last_url_${id}`]: provider.url });
-    try {
-      localStorage.setItem(`last_url_${id}`, provider.url);
-    } catch (e) {}
-  } else {
-    const cachedUrl = localStorage.getItem(`last_url_${id}`) || provider.url;
-    if (frame.src !== cachedUrl) {
-      showLoader();
-      frame.src = cachedUrl;
-    }
-    chrome.storage.local.get([`last_url_${id}`], (result) => {
-      const urlToLoad = result[`last_url_${id}`] || provider.url;
-      if (frame.src !== urlToLoad) {
-        frame.src = urlToLoad;
-      }
-      try {
-        localStorage.setItem(`last_url_${id}`, urlToLoad);
-      } catch (e) {}
+      suggestionsDropdown.appendChild(item);
     });
   }
 
-  Array.from(menu.children).forEach((child, index) => {
-    const p = providers[index];
-    if (p && p.id === id) {
-      child.classList.add("active");
-    } else {
-      child.classList.remove("active");
-    }
-  });
+  // Google Autocomplete Predictions Section
+  if (googleSuggestions.length > 0) {
+    const title = document.createElement("div");
+    title.className = "suggestion-section-title";
+    title.textContent = "Google suggestions";
+    suggestionsDropdown.appendChild(title);
 
-  chrome.storage.local.set({ selectedProvider: id });
-  try {
-    localStorage.setItem("selectedProvider", id);
-  } catch (e) {}
-}
+    googleSuggestions.forEach(queryStr => {
+      const item = document.createElement("div");
+      item.className = "suggestion-item";
 
-trigger.addEventListener("click", (e) => {
-  e.stopPropagation();
-  const isOpen = dropdown.classList.toggle("open");
-  if (isOpen) {
-    overlay.classList.remove("hidden");
-  } else {
-    overlay.classList.add("hidden");
+      const icon = document.createElement("span");
+      icon.innerHTML = `<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>`;
+      icon.style.display = "inline-flex";
+      icon.style.color = "var(--text-muted)";
+
+      const text = document.createElement("span");
+      text.textContent = queryStr;
+
+      item.appendChild(icon);
+      item.appendChild(text);
+
+      item.addEventListener("click", () => {
+        navigate(queryStr);
+        suggestionsDropdown.classList.add("hidden");
+      });
+
+      suggestionsDropdown.appendChild(item);
+    });
   }
-});
-
-overlay.addEventListener("click", () => {
-  dropdown.classList.remove("open");
-  overlay.classList.add("hidden");
-});
-
-document.addEventListener("click", () => {
-  dropdown.classList.remove("open");
-  overlay.classList.add("hidden");
-});
+}
 
 function saveLastUrl(url) {
-  if (!activeWebId || !url || url === "about:blank") return;
+  if (!url || url === "about:blank") return;
+
+  setAddressBarValue(url);
+  updateHistory(url);
+
+  if (!activeWebId) {
+    matchAndActivateProvider(url);
+  }
+
+  if (!activeWebId) return;
+
   const provider = providers.find(p => p.id === activeWebId);
   if (!provider) return;
+
   try {
     const providerHost = new URL(provider.url).hostname;
     const newUrlHost = new URL(url).hostname;
@@ -263,31 +386,18 @@ frame.addEventListener("load", () => {
     try {
       const currentUrl = frame.contentWindow.location.href;
       saveLastUrl(currentUrl);
-    } catch (e) {
-    }
+    } catch (e) {}
   }
 });
 
 chrome.runtime.onMessage.addListener((message, sender) => {
   if (message) {
-    if (message.type === "LUMINA_URL_CHANGED" && !sender.tab) {
+    if (message.type === "LUMINA_URL_CHANGED" && message.isSidePanel) {
       saveLastUrl(message.url);
-    } else if (message.type === "LUMINA_PAGE_LOADING") {
+    } else if (message.type === "LUMINA_PAGE_LOADING" && message.isSidePanel) {
       showLoader();
     }
   }
-});
-
-refreshBtn.addEventListener("click", () => {
-  showLoader();
-  chrome.storage.local.get([`last_url_${activeWebId}`], (result) => {
-    const currentUrl = result[`last_url_${activeWebId}`];
-    if (currentUrl) {
-      frame.src = currentUrl;
-    } else {
-      frame.src = frame.src;
-    }
-  });
 });
 
 optionsBtn.addEventListener("click", () => {
@@ -300,9 +410,7 @@ chrome.storage.onChanged.addListener((changes) => {
     try {
       localStorage.setItem("providers", JSON.stringify(providers));
     } catch (e) {}
-    buildDropdown();
     
-    // Apply new zoom in real-time
     if (activeWebId) {
       const activeProvider = providers.find(p => p.id === activeWebId);
       if (activeProvider) {
@@ -348,7 +456,38 @@ forwardBtn.addEventListener("click", () => {
   }
 });
 
-// Run synchronous pre-render for immediate visual availability
-preRender();
+// Bind address bar events
+addressInput.addEventListener("input", (e) => {
+  handleAutocomplete(e.target.value);
+});
+
+addressInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    navigate(addressInput.value);
+    suggestionsDropdown.classList.add("hidden");
+    addressInput.blur();
+  }
+});
+
+addressInput.addEventListener("focus", () => {
+  if (currentFullUrl) {
+    addressInput.value = currentFullUrl;
+  }
+  addressInput.select();
+});
+
+addressInput.addEventListener("blur", () => {
+  setTimeout(() => {
+    if (document.activeElement !== addressInput) {
+      addressInput.value = formatDisplayUrl(currentFullUrl);
+    }
+  }, 150);
+});
+
+document.addEventListener("click", (e) => {
+  if (!addressInput.contains(e.target) && !suggestionsDropdown.contains(e.target)) {
+    suggestionsDropdown.classList.add("hidden");
+  }
+});
 
 init();

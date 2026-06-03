@@ -1,15 +1,6 @@
 import { getAuthToken, removeCachedAuthToken, getUserProfile, syncData } from "./options_oauth.js";
 
-const DEFAULT_PROVIDERS = [
-  { id: "deepseek", name: "DeepSeek", url: "https://chat.deepseek.com" },
-  { id: "mistral", name: "Mistral", url: "https://chat.mistral.ai" },
-  { id: "meta", name: "Meta AI", url: "https://www.meta.ai" },
-  { id: "chatgpt", name: "ChatGPT", url: "https://chatgpt.com" },
-  { id: "claude", name: "Claude", url: "https://claude.ai" },
-  { id: "gemini", name: "Gemini", url: "https://gemini.google.com" },
-  { id: "copilot", name: "Copilot", url: "https://copilot.microsoft.com" },
-  { id: "grok", name: "Grok", url: "https://grok.com" },
-];
+const DEFAULT_PROVIDERS = [];
 
 let jsEditor = null;
 let cssEditor = null;
@@ -17,6 +8,7 @@ let providers = [];
 let customAssets = {};
 let selectedId = null;
 let selectedZoom = 100;
+let activeCodeTab = "regular"; // "regular" or "sidepanel"
 
 const zoomVal = document.getElementById("zoom-val");
 const zoomInBtn = document.getElementById("zoom-in-btn");
@@ -32,7 +24,6 @@ const emptyView = document.getElementById("empty-view");
 
 const webName = document.getElementById("web-name");
 const webUrl = document.getElementById("web-url");
-const panelTitle = document.getElementById("panel-title");
 
 const formatJsBtn = document.getElementById("format-js-btn");
 const formatCssBtn = document.getElementById("format-css-btn");
@@ -50,20 +41,96 @@ const inputSyncCredentials = document.getElementById("input-sync-credentials");
 const btnUploadSyncJson = document.getElementById("btn-upload-sync-json");
 const btnCancelSyncSetup = document.getElementById("btn-cancel-sync-setup");
 
+const searchInput = document.getElementById("search-input");
+const rulesCount = document.getElementById("rules-count");
+
+const ruleEnabled = document.getElementById("rule-enabled");
+const ruleSidepanel = document.getElementById("rule-sidepanel");
+const zoomGroupContainer = document.getElementById("zoom-group-container");
+
+const tabRegular = document.getElementById("tab-regular");
+const tabSidepanel = document.getElementById("tab-sidepanel");
+
 function init() {
   chrome.storage.local.get(["providers", "custom_assets"], (result) => {
     providers = result.providers || DEFAULT_PROVIDERS;
     customAssets = result.custom_assets || {};
+    
+    // Compatibility: Make sure existing providers have enabled/inSidePanel set
+    providers.forEach(p => {
+      if (p.enabled === undefined) p.enabled = true;
+      if (p.inSidePanel === undefined) p.inSidePanel = true;
+    });
+
     initEditors();
     renderSidebar();
     
     if (providers.length > 0) {
-      selectWeb(providers[0].id);
+      const activeProviders = providers.filter(p => !p.deleted);
+      if (activeProviders.length > 0) {
+        selectWeb(activeProviders[0].id);
+      }
     }
 
     renderSyncUI();
     attemptSilentSync();
   });
+  
+  if (searchInput) {
+    searchInput.addEventListener("input", renderSidebar);
+  }
+
+  if (tabRegular && tabSidepanel) {
+    tabRegular.addEventListener("click", () => switchCodeTab("regular"));
+    tabSidepanel.addEventListener("click", () => switchCodeTab("sidepanel"));
+  }
+
+  if (ruleSidepanel) {
+    ruleSidepanel.addEventListener("change", (e) => {
+      zoomGroupContainer.classList.toggle("hidden", !e.target.checked);
+    });
+  }
+}
+
+function switchCodeTab(target) {
+  if (!selectedId) return;
+  if (activeCodeTab === target) return;
+
+  // Cache the current values from the editor
+  const currentJs = jsEditor.getValue();
+  const currentCss = cssEditor.getValue();
+
+  if (!customAssets[selectedId]) {
+    customAssets[selectedId] = {};
+  }
+
+  if (activeCodeTab === "regular") {
+    customAssets[selectedId].js = currentJs;
+    customAssets[selectedId].css = currentCss;
+  } else {
+    customAssets[selectedId].sidepanelJs = currentJs;
+    customAssets[selectedId].sidepanelCss = currentCss;
+  }
+
+  activeCodeTab = target;
+
+  // Update UI tabs
+  tabRegular.classList.toggle("active", target === "regular");
+  tabSidepanel.classList.toggle("active", target === "sidepanel");
+
+  // Update labels
+  document.getElementById("js-label").textContent = target === "regular" ? "JavaScript" : "JavaScript (Side Panel)";
+  document.getElementById("css-label").textContent = target === "regular" ? "SCSS or CSS" : "SCSS or CSS (Side Panel)";
+
+  // Load target values
+  const assets = customAssets[selectedId];
+  if (target === "regular") {
+    jsEditor.setValue(assets.js || "", -1);
+    cssEditor.setValue(assets.css || "", -1);
+  } else {
+    jsEditor.setValue(assets.sidepanelJs || "", -1);
+    cssEditor.setValue(assets.sidepanelCss || "", -1);
+  }
 }
 
 function renderSyncUI() {
@@ -156,6 +223,12 @@ async function loginGoogle() {
     chrome.storage.local.get(["providers", "custom_assets"], (result) => {
       providers = result.providers || DEFAULT_PROVIDERS;
       customAssets = result.custom_assets || {};
+      
+      providers.forEach(p => {
+        if (p.enabled === undefined) p.enabled = true;
+        if (p.inSidePanel === undefined) p.inSidePanel = true;
+      });
+
       renderSidebar();
       if (providers.length > 0) {
         selectWeb(providers[0].id);
@@ -188,6 +261,12 @@ async function handleManualSync() {
       chrome.storage.local.get(["providers", "custom_assets"], (result) => {
         providers = result.providers || DEFAULT_PROVIDERS;
         customAssets = result.custom_assets || {};
+        
+        providers.forEach(p => {
+          if (p.enabled === undefined) p.enabled = true;
+          if (p.inSidePanel === undefined) p.inSidePanel = true;
+        });
+
         renderSidebar();
         if (providers.length > 0) {
           selectWeb(providers[0].id);
@@ -286,8 +365,6 @@ zoomOutBtn.addEventListener("click", () => {
   }
 });
 
-
-
 function initEditors() {
   jsEditor = ace.edit("web-js");
   jsEditor.setTheme("ace/theme/chrome");
@@ -332,9 +409,8 @@ function initEditors() {
       
       let snippet = "";
       if (value === "autofocus") {
-        snippet = `// Autofocus rich-textarea/input when user typing begins
-document.addEventListener('keydown', function(event) {
-  const inputElement = document.querySelector('rich-textarea div.ql-editor[contenteditable="true"], input[type="text"], input[type="search"], textarea');
+        snippet = `document.addEventListener('keydown', function(event) {
+  const inputElement = document.querySelector('rich-textarea div.ql-editor[contenteditable="true"], input[type="text"], input[type="search"], textarea'); // <-- REPLACE with your input/editor selector if needed
   if (!inputElement) return;
 
   const activeElement = document.activeElement;
@@ -354,17 +430,15 @@ document.addEventListener('keydown', function(event) {
   }
 });\n`;
       } else if (value === "autoclick") {
-        snippet = `// Auto click a specific button by class or tag name
-const clickTimer = setInterval(() => {
-  const btn = document.querySelector('.btn-primary, button');
+        snippet = `const clickTimer = setInterval(() => {
+  const btn = document.querySelector('.btn-primary, button'); // <-- REPLACE with your button selector (e.g. '.btn-primary' or '#submit-btn')
   if (btn) {
     btn.click();
     clearInterval(clickTimer);
   }
 }, 500);\n`;
       } else if (value === "darkmode") {
-        snippet = `// Inject simple dark stylesheet dynamically
-const style = document.createElement('style');
+        snippet = `const style = document.createElement('style');
 style.textContent = \`
   html, body {
     background-color: #121212 !important;
@@ -376,8 +450,7 @@ style.textContent = \`
 \`;
 document.head.appendChild(style);\n`;
       } else if (value === "scroll") {
-        snippet = `// Auto scroll page to bottom on content changes
-const observer = new MutationObserver(() => {
+        snippet = `const observer = new MutationObserver(() => {
   window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
 });
 observer.observe(document.body, { childList: true, subtree: true });\n`;
@@ -397,10 +470,24 @@ observer.observe(document.body, { childList: true, subtree: true });\n`;
 
 function renderSidebar() {
   webList.innerHTML = "";
-  providers.forEach((p) => {
-    if (p.deleted) return;
+  const query = searchInput ? searchInput.value.toLowerCase() : "";
+  
+  const filtered = providers.filter((p) => {
+    if (p.deleted) return false;
+    return p.name.toLowerCase().includes(query) || p.url.toLowerCase().includes(query);
+  });
+
+  if (rulesCount) {
+    rulesCount.textContent = filtered.length;
+  }
+
+  filtered.forEach((p) => {
     const li = document.createElement("li");
     li.className = `web-item ${p.id === selectedId ? "active" : ""}`;
+    
+    // Left part (Icon + Name + URL)
+    const leftDiv = document.createElement("div");
+    leftDiv.className = "web-item-left";
     
     const icon = document.createElement("img");
     if (["deepseek", "mistral", "meta", "chatgpt", "claude", "gemini", "copilot", "grok"].includes(p.id)) {
@@ -413,15 +500,66 @@ function renderSidebar() {
       }
     }
     
-    const span = document.createElement("span");
-    span.textContent = p.name;
+    const textWrapper = document.createElement("div");
+    textWrapper.style.display = "flex";
+    textWrapper.style.flexDirection = "column";
+    textWrapper.style.gap = "2px";
+    textWrapper.style.minWidth = "0";
     
-    li.appendChild(icon);
-    li.appendChild(span);
+    const nameSpan = document.createElement("span");
+    nameSpan.textContent = p.name;
+    nameSpan.style.fontSize = "13px";
+    nameSpan.style.fontWeight = "600";
     
-    li.addEventListener("click", () => {
+    const urlSpan = document.createElement("span");
+    urlSpan.textContent = p.url;
+    urlSpan.style.fontSize = "10px";
+    urlSpan.style.color = "var(--text-muted)";
+    urlSpan.style.whiteSpace = "nowrap";
+    urlSpan.style.overflow = "hidden";
+    urlSpan.style.textOverflow = "ellipsis";
+    
+    textWrapper.appendChild(nameSpan);
+    textWrapper.appendChild(urlSpan);
+    leftDiv.appendChild(icon);
+    leftDiv.appendChild(textWrapper);
+    li.appendChild(leftDiv);
+    
+    leftDiv.addEventListener("click", () => {
       selectWeb(p.id);
     });
+    
+    // Right part (Active Switch Toggle)
+    const rightDiv = document.createElement("div");
+    const switchLabel = document.createElement("label");
+    switchLabel.className = "switch";
+    switchLabel.addEventListener("click", (e) => {
+      e.stopPropagation();
+    });
+    
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.checked = p.enabled !== false;
+    checkbox.addEventListener("change", (e) => {
+      p.enabled = e.target.checked;
+      p.updatedAt = Date.now();
+      chrome.storage.local.set({ providers });
+      try {
+        localStorage.setItem("providers", JSON.stringify(providers));
+      } catch (err) {}
+      
+      if (selectedId === p.id) {
+        ruleEnabled.checked = p.enabled;
+      }
+    });
+    
+    const slider = document.createElement("span");
+    slider.className = "slider round";
+    
+    switchLabel.appendChild(checkbox);
+    switchLabel.appendChild(slider);
+    rightDiv.appendChild(switchLabel);
+    li.appendChild(rightDiv);
     
     webList.appendChild(li);
   });
@@ -437,25 +575,38 @@ function selectWeb(id) {
   emptyView.classList.add("hidden");
   editorView.classList.remove("hidden");
   
-  panelTitle.textContent = `Edit ${provider.name}`;
   webName.value = provider.name;
   webUrl.value = provider.url;
+  
+  ruleEnabled.checked = provider.enabled !== false;
+  ruleSidepanel.checked = provider.inSidePanel !== false;
+  zoomGroupContainer.classList.toggle("hidden", provider.inSidePanel === false);
   
   selectedZoom = provider.zoom || 100;
   zoomVal.textContent = `${selectedZoom}%`;
   
-  const assets = customAssets[id] || { js: "", css: "" };
+  // Set code editor tab back to "regular" on change selection
+  activeCodeTab = "regular";
+  tabRegular.classList.add("active");
+  tabSidepanel.classList.remove("active");
+  document.getElementById("js-label").textContent = "JavaScript";
+  document.getElementById("css-label").textContent = "SCSS or CSS";
+
+  const assets = customAssets[id] || { js: "", css: "", sidepanelJs: "", sidepanelCss: "" };
   jsEditor.setValue(assets.js || "", -1);
   cssEditor.setValue(assets.css || "", -1);
 }
 
-addBtn.addEventListener("click", () => {
+addBtn.addEventListener("click", (e) => {
+  e.preventDefault();
   const newId = `custom-${Date.now()}`;
   const newProvider = {
     id: newId,
     name: "New Website",
     url: "https://",
     zoom: 100,
+    enabled: true,
+    inSidePanel: false, // Default new rules to not show in side panel
     updatedAt: Date.now()
   };
   
@@ -463,7 +614,7 @@ addBtn.addEventListener("click", () => {
   chrome.storage.local.set({ providers }, () => {
     try {
       localStorage.setItem("providers", JSON.stringify(providers));
-    } catch (e) {}
+    } catch (err) {}
     selectWeb(newId);
   });
 });
@@ -478,19 +629,30 @@ saveBtn.addEventListener("click", () => {
   
   providers[providerIndex].name = webName.value.trim();
   providers[providerIndex].url = newUrl;
+  providers[providerIndex].enabled = ruleEnabled.checked;
+  providers[providerIndex].inSidePanel = ruleSidepanel.checked;
   providers[providerIndex].zoom = selectedZoom;
   providers[providerIndex].updatedAt = Date.now();
   
-  customAssets[selectedId] = {
-    js: jsEditor.getValue(),
-    css: cssEditor.getValue(),
-    updatedAt: Date.now()
-  };
+  // Capture current values into memory
+  if (!customAssets[selectedId]) {
+    customAssets[selectedId] = {};
+  }
+  
+  if (activeCodeTab === "regular") {
+    customAssets[selectedId].js = jsEditor.getValue();
+    customAssets[selectedId].css = cssEditor.getValue();
+  } else {
+    customAssets[selectedId].sidepanelJs = jsEditor.getValue();
+    customAssets[selectedId].sidepanelCss = cssEditor.getValue();
+  }
+  
+  customAssets[selectedId].updatedAt = Date.now();
   
   chrome.storage.local.set({ providers, custom_assets: customAssets, force_refresh: Date.now() }, () => {
     try {
       localStorage.setItem("providers", JSON.stringify(providers));
-    } catch (e) {}
+    } catch (err) {}
     updateDynamicRules();
     renderSidebar();
     selectWeb(selectedId);
@@ -519,7 +681,7 @@ deleteBtn.addEventListener("click", () => {
   chrome.storage.local.set({ providers, custom_assets: customAssets }, () => {
     try {
       localStorage.setItem("providers", JSON.stringify(providers));
-    } catch (e) {}
+    } catch (err) {}
     updateDynamicRules();
     selectedId = null;
     editorView.classList.add("hidden");
@@ -535,7 +697,9 @@ function updateDynamicRules() {
     const removeRuleIds = existingRules.map((rule) => rule.id);
     const addRules = [];
     
+    // Only construct frame rule exceptions for rule configurations that are in the Sidepanel
     providers.forEach((p, index) => {
+      if (p.deleted || !p.inSidePanel) return;
       try {
         const hostname = new URL(p.url).hostname;
         if (!hostname) return;

@@ -454,6 +454,19 @@ document.head.appendChild(style);\n`;
   window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
 });
 observer.observe(document.body, { childList: true, subtree: true });\n`;
+      } else if (value === "scroll-to-element") {
+        snippet = `window.addEventListener('DOMContentLoaded', () => {
+  const targetSelector = '#id-phan-tu-cua-ban'; // <-- REPLACE with your element selector (e.g. '#header' or '.main-content')
+  const targetElement = document.querySelector(targetSelector);
+  if (targetElement) {
+    setTimeout(() => {
+      targetElement.scrollIntoView({ 
+        behavior: 'smooth', 
+        block: 'center' 
+      });
+    }, 150);
+  }
+});\n`;
       }
       
       if (snippet && jsEditor) {
